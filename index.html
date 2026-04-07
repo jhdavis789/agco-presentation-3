@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Precision Agriculture — Per-Bushel Unit Economics</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --navy:       #1A3156;
+    --navy-light: #2B5281;
+    --blue:       #3A7BC8;
+    --blue-mid:   #5A9BD5;
+    --blue-light: #8FBCE6;
+    --blue-pale:  #C5DCF0;
+    --teal:       #2A8D8D;
+    --teal-light: #4DB8B8;
+    --gold:       #C8963E;
+    --gold-light: #E0B96A;
+    --green:      #2D8E5E;
+    --green-light:#4DB87E;
+    --slate:      #4A5E73;
+    --text:       #1E3248;
+    --text-sec:   #5A7084;
+    --text-tert:  #8A9CAE;
+    --bg:         #F7F9FC;
+    --card:       #FFFFFF;
+    --border:     #E2E8F0;
+    --red-muted:  #C05454;
+  }
+  html, body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ── Slide deck ── */
+  .deck { position: relative; height: 100vh; }
+  .slide {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    padding: 24px 40px 16px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.35s ease;
+  }
+  .slide.active { opacity: 1; pointer-events: auto; }
+
+  .header {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 14px; border-bottom: 2px solid var(--navy); padding-bottom: 10px;
+  }
+  .header h1 { font-size: 20px; font-weight: 700; color: var(--navy); letter-spacing: -0.3px; }
+  .header .subtitle { font-size: 12px; font-weight: 400; color: var(--text-sec); margin-top: 2px; }
+  .header .source-tag { font-size: 9px; color: var(--text-tert); text-align: right; max-width: 340px; line-height: 1.4; }
+
+  .grid {
+    flex: 1; display: grid;
+    grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;
+    gap: 14px; min-height: 0;
+  }
+  .panel {
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px 16px 10px; display: flex; flex-direction: column;
+    position: relative; overflow: hidden;
+  }
+  .panel::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  }
+  #slide1 .panel:nth-child(1)::before { background: var(--navy); }
+  #slide1 .panel:nth-child(2)::before { background: var(--blue); }
+  #slide1 .panel:nth-child(3)::before { background: var(--teal); }
+  #slide1 .panel:nth-child(4)::before { background: var(--green); }
+  #slide2 .panel:nth-child(1)::before { background: var(--green); }
+  #slide2 .panel:nth-child(2)::before { background: var(--teal); }
+  #slide2 .panel:nth-child(3)::before { background: var(--navy); }
+
+  .panel-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
+  .panel-title { font-size: 11.5px; font-weight: 600; color: var(--navy); text-transform: uppercase; letter-spacing: 0.5px; }
+  .panel-note { font-size: 9px; color: var(--text-tert); }
+  .chart-wrap { flex: 1; position: relative; min-height: 0; }
+
+  .kpi-row { display: flex; gap: 8px; margin-bottom: 6px; }
+  .kpi { flex: 1; text-align: center; padding: 7px 4px 5px; background: var(--bg); border-radius: 6px; }
+  .kpi-value { font-size: 18px; font-weight: 700; line-height: 1.1; }
+  .kpi-label { font-size: 8px; color: var(--text-sec); font-weight: 500; text-transform: uppercase; letter-spacing: 0.4px; margin-top: 2px; }
+
+  .roi-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 6px; }
+  .roi-block { background: var(--bg); border-radius: 6px; padding: 7px 6px; text-align: center; }
+  .roi-block .val { font-size: 19px; font-weight: 700; line-height: 1.1; }
+  .roi-block .lbl { font-size: 7.5px; color: var(--text-sec); font-weight: 500; text-transform: uppercase; letter-spacing: 0.3px; margin-top: 2px; }
+
+  .cost-legend { display: flex; flex-wrap: wrap; gap: 3px 10px; margin-top: 4px; }
+  .cost-legend-item { display: flex; align-items: center; gap: 3px; font-size: 8.5px; color: var(--text-sec); }
+  .cost-legend-item .swatch { width: 7px; height: 7px; border-radius: 2px; flex-shrink: 0; }
+
+  /* ── Takeaway banner ── */
+  .takeaway {
+    background: linear-gradient(135deg, var(--navy), var(--navy-light));
+    border-radius: 8px; padding: 14px 18px; color: #FFFFFF;
+    flex: 1; display: flex; flex-direction: column; justify-content: center;
+  }
+  .takeaway h3 { font-size: 12px; font-weight: 600; margin-bottom: 10px; letter-spacing: 0.3px; }
+  .takeaway .stat-row { display: flex; gap: 16px; margin-bottom: 10px; justify-content: center; }
+  .takeaway .stat { text-align: center; }
+  .takeaway .stat .num { font-size: 24px; font-weight: 700; color: var(--gold-light); line-height: 1; }
+  .takeaway .stat .desc { font-size: 8px; opacity: 0.8; margin-top: 3px; text-transform: uppercase; letter-spacing: 0.4px; }
+  .takeaway .insight { font-size: 10.5px; font-weight: 400; opacity: 0.9; line-height: 1.55; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 8px; margin-top: 2px; }
+
+  .footer {
+    margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .footer-left { font-size: 8px; color: var(--text-tert); line-height: 1.5; }
+  .footer-right { font-size: 8px; color: var(--text-tert); text-align: right; }
+
+  .nav {
+    position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 8px; z-index: 100;
+  }
+  .nav-dot {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--border);
+    cursor: pointer; transition: background 0.2s;
+  }
+  .nav-dot.active { background: var(--navy); }
+  .nav-hint { position: fixed; bottom: 10px; right: 40px; font-size: 9px; color: var(--text-tert); z-index: 100; }
+</style>
+</head>
+<body>
+
+<div class="deck">
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SLIDE 1: Cost Anatomy & Precision Savings              -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="slide active" id="slide1">
+  <div class="header">
+    <div>
+      <h1>The $4.32 Bushel — Cost Anatomy & Precision Savings</h1>
+      <div class="subtitle">Corn, US Midwest &nbsp;|&nbsp; 1,500-acre operation &nbsp;|&nbsp; 211 bu/acre trend yield &nbsp;|&nbsp; Corn-after-soybeans</div>
+    </div>
+    <div class="source-tag">Iowa State Extension FM 1712 (2026) · USDA ERS Costs & Returns (2025) · USDA ARMS</div>
+  </div>
+
+  <div class="grid">
+    <!-- 1A: Cost Breakdown -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Per-Bushel Cost Anatomy</span>
+        <span class="panel-note">$912/ac at 211 bu/ac</span>
+      </div>
+      <div class="chart-wrap"><canvas id="costBar"></canvas></div>
+      <div class="cost-legend" id="costLegend"></div>
+    </div>
+
+    <!-- 1B: Savings by Technology -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Precision Ag Cost Savings</span>
+        <span class="panel-note">$/bu, conservative published estimates</span>
+      </div>
+      <div class="chart-wrap"><canvas id="savingsChart"></canvas></div>
+    </div>
+
+    <!-- 1C: Equipment ROI -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Equipment Investment vs. Savings</span>
+        <span class="panel-note">~$120K amortized 7yr + subs + maintenance</span>
+      </div>
+      <div class="roi-grid">
+        <div class="roi-block">
+          <div class="val" style="color: var(--red-muted);">$0.13</div>
+          <div class="lbl">Tech Cost / Bu</div>
+        </div>
+        <div class="roi-block">
+          <div class="val" style="color: var(--green);">$0.32</div>
+          <div class="lbl">Cost Saved / Bu</div>
+        </div>
+        <div class="roi-block">
+          <div class="val" style="color: var(--navy);">2.5x</div>
+          <div class="lbl">Cost-Side ROI</div>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="roiChart"></canvas></div>
+    </div>
+
+    <!-- 1D: Cost Waterfall -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Net Cost Reduction</span>
+        <span class="panel-note">Cost-side only, before yield effects</span>
+      </div>
+      <div class="kpi-row">
+        <div class="kpi">
+          <div class="kpi-value" style="color: var(--navy);">$4.32</div>
+          <div class="kpi-label">Before</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-value" style="color: var(--green);">$4.13</div>
+          <div class="kpi-label">After Precision Ag</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-value" style="color: var(--gold);">-$0.19</div>
+          <div class="kpi-label">Net / Bushel</div>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="costWaterfall"></canvas></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="footer-left">
+      Tech costs include hardware amortization (7yr), RTK/data subscriptions, soil sampling, See & Spray ($3/ac), maintenance (10%/yr), connectivity.<br>
+      Savings: USDA ARMS (VR fert, autosteer, analytics), Iowa State Extension (section control), farmdoc (VR seeding), Iowa State/Deere (targeted spraying).
+    </div>
+    <div class="footer-right">Slide 1 of 2 &nbsp;|&nbsp; For illustrative purposes</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SLIDE 2: Yield Uplift & Total Return                   -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="slide" id="slide2">
+  <div class="header">
+    <div>
+      <h1>The Yield Multiplier — Complete Precision Ag Return</h1>
+      <div class="subtitle">Cost savings + yield uplift combined &nbsp;|&nbsp; Revenue at $4.50/bu (USDA 2025–26F)</div>
+    </div>
+    <div class="source-tag">Beck's PFR · Ag Leader · Ohio State · farmdoc · John Deere See & Spray (5M ac, 2025)</div>
+  </div>
+
+  <div class="grid">
+    <!-- 2A: Yield Increase -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Yield Uplift by Technology</span>
+        <span class="panel-note">Conservative estimates, bu/acre</span>
+      </div>
+      <div class="kpi-row">
+        <div class="kpi">
+          <div class="kpi-value" style="color: var(--green);">+10</div>
+          <div class="kpi-label">Bu/Acre Gain</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-value" style="color: var(--green);">+4.7%</div>
+          <div class="kpi-label">Yield Increase</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-value" style="color: var(--gold);">+$45</div>
+          <div class="kpi-label">Revenue / Acre</div>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="yieldChart"></canvas></div>
+    </div>
+
+    <!-- 2B: Fixed Cost Dilution -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Fixed Cost Dilution</span>
+        <span class="panel-note">Land ($274) + equip. depreciation ($102) = $376/ac fixed</span>
+      </div>
+      <div class="chart-wrap"><canvas id="dilutionChart"></canvas></div>
+    </div>
+
+    <!-- 2C: Combined Profit Waterfall -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Profit Per Acre — Full Impact</span>
+        <span class="panel-note">Cost savings + yield revenue − technology cost</span>
+      </div>
+      <div class="chart-wrap"><canvas id="profitWaterfall"></canvas></div>
+    </div>
+
+    <!-- 2D: Takeaway -->
+    <div class="panel" style="padding: 14px 0 10px 0; border: none; background: transparent;">
+      <div class="takeaway">
+        <h3>Total Precision Ag Return</h3>
+        <div class="stat-row">
+          <div class="stat">
+            <div class="num">$0.55</div>
+            <div class="desc">Margin / Bu</div>
+          </div>
+          <div class="stat">
+            <div class="num">3.1x</div>
+            <div class="desc">vs. Baseline</div>
+          </div>
+          <div class="stat">
+            <div class="num">$122</div>
+            <div class="desc">Profit / Acre</div>
+          </div>
+          <div class="stat">
+            <div class="num">~11mo</div>
+            <div class="desc">Payback</div>
+          </div>
+        </div>
+        <div class="insight">
+          A $120K equipment investment on 1,500 acres generates ~$126K in annual incremental profit. The combined effect of input cost reduction ($67/ac) and yield-driven revenue ($45/ac), net of all-in technology cost ($28/ac including amortization, subscriptions, maintenance, and incremental drying), lifts per-bushel margin from $0.18 to $0.55 — transforming a break-even crop into a profitable one.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="footer-left">
+      Yield: Beck's PFR (downforce +5.5 bu, conservative at +4), Ohio State (singulation, not separately counted), farmdoc (VRS +0.7-2.9), Deere (See & Spray +2 avg).<br>
+      Incremental variable cost: $5/ac (drying on additional yield). Payback = $120K equipment / $136K yr-1 net cash benefit.
+    </div>
+    <div class="footer-right">Slide 2 of 2 &nbsp;|&nbsp; For illustrative purposes</div>
+  </div>
+</div>
+
+</div>
+
+<div class="nav">
+  <div class="nav-dot active" data-slide="0"></div>
+  <div class="nav-dot" data-slide="1"></div>
+</div>
+<div class="nav-hint">Arrow keys to navigate</div>
+
+<script>
+// ── Navigation ──
+const slides = document.querySelectorAll('.slide');
+const dots = document.querySelectorAll('.nav-dot');
+let cur = 0;
+function goTo(i) {
+  if (i < 0 || i >= slides.length) return;
+  slides[cur].classList.remove('active');
+  dots[cur].classList.remove('active');
+  cur = i;
+  slides[cur].classList.add('active');
+  dots[cur].classList.add('active');
+}
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') goTo(cur + 1);
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') goTo(cur - 1);
+});
+dots.forEach(d => d.addEventListener('click', () => goTo(+d.dataset.slide)));
+
+// ── Chart defaults ──
+Chart.defaults.font.family = "'Inter', sans-serif";
+Chart.defaults.font.size = 11;
+Chart.defaults.color = '#5A7084';
+Chart.defaults.plugins.legend.display = false;
+Chart.defaults.elements.line.tension = 0;
+Chart.defaults.animation.duration = 700;
+
+const C = {
+  navy: '#1A3156', navyL: '#2B5281', blue: '#3A7BC8', blueM: '#5A9BD5',
+  blueL: '#8FBCE6', blueP: '#C5DCF0', teal: '#2A8D8D', tealL: '#4DB8B8',
+  gold: '#C8963E', goldL: '#E0B96A', green: '#2D8E5E', greenL: '#4DB87E',
+  slate: '#4A5E73', red: '#C05454',
+};
+
+// ═════════════════════════════════════════════
+// Waterfall connector plugin (reusable)
+// Pass connectorLevels array in plugin options
+// ═════════════════════════════════════════════
+const waterfallPlugin = {
+  id: 'waterfallConnectors',
+  afterDatasetsDraw(chart) {
+    const levels = chart.options.plugins.waterfallConnectors?.levels;
+    if (!levels) return;
+    const ctx = chart.ctx;
+    const meta = chart.getDatasetMeta(1); // visible bars
+    const yScale = chart.scales.y;
+    ctx.save();
+    ctx.strokeStyle = '#CBD5E0';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 2]);
+    for (let i = 0; i < levels.length; i++) {
+      const bar1 = meta.data[i];
+      const bar2 = meta.data[i + 1];
+      if (!bar1 || !bar2) continue;
+      const y = yScale.getPixelForValue(levels[i]);
+      ctx.beginPath();
+      ctx.moveTo(bar1.x + bar1.width / 2 + 2, y);
+      ctx.lineTo(bar2.x - bar2.width / 2 - 2, y);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+};
+
+// Waterfall value label plugin (reusable)
+function makeWaterfallLabels(labels) {
+  return {
+    id: 'wfLabels',
+    afterDatasetsDraw(chart) {
+      const ctx = chart.ctx;
+      const meta = chart.getDatasetMeta(1);
+      ctx.save();
+      ctx.font = "600 10px 'Inter', sans-serif";
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillStyle = '#3A4F63';
+      meta.data.forEach((bar, i) => {
+        if (labels[i]) ctx.fillText(labels[i], bar.x, bar.y - 4);
+      });
+      ctx.restore();
+    }
+  };
+}
+
+// Register waterfall connector plugin globally
+Chart.register(waterfallPlugin);
+
+// ═════════════════════════════════════════════
+// SLIDE 1 CHARTS
+// ═════════════════════════════════════════════
+
+// 1A: Cost anatomy
+const costCats = [
+  { label: 'Land',            value: 1.30, color: C.navy },
+  { label: 'Equipment',       value: 0.80, color: C.navyL },
+  { label: 'Fertilizer',      value: 0.80, color: C.blue },
+  { label: 'Seed',            value: 0.54, color: C.blueM },
+  { label: 'Crop Protection', value: 0.27, color: C.blueL },
+  { label: 'Labor',           value: 0.25, color: C.teal },
+  { label: 'Drying',          value: 0.23, color: C.tealL },
+  { label: 'Fuel & Energy',   value: 0.13, color: C.gold },
+];
+
+const legendEl = document.getElementById('costLegend');
+costCats.forEach(c => {
+  const div = document.createElement('div');
+  div.className = 'cost-legend-item';
+  div.innerHTML = `<span class="swatch" style="background:${c.color}"></span>${c.label} $${c.value.toFixed(2)}`;
+  legendEl.appendChild(div);
+});
+
+new Chart(document.getElementById('costBar'), {
+  type: 'bar',
+  data: {
+    labels: ['Cost / Bushel'],
+    datasets: costCats.map(c => ({
+      label: c.label, data: [c.value], backgroundColor: c.color,
+      borderWidth: 0, barPercentage: 0.5, categoryPercentage: 0.9,
+    })),
+  },
+  options: {
+    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+    scales: {
+      x: {
+        stacked: true, grid: { color: '#EDF2F7', drawTicks: false }, border: { display: false },
+        ticks: { callback: v => '$' + v.toFixed(2), stepSize: 0.50, font: { size: 10 } }, max: 5.0,
+      },
+      y: { stacked: true, display: false },
+    },
+    plugins: {
+      tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: $${ctx.parsed.x.toFixed(2)}/bu (${((ctx.parsed.x/4.32)*100).toFixed(0)}%)` } },
+    },
+  },
+  plugins: [{
+    id: 'revLine',
+    afterDraw(chart) {
+      const ctx = chart.ctx;
+      const x = chart.scales.x.getPixelForValue(4.50);
+      const top = chart.scales.y.top - 4, bottom = chart.scales.y.bottom + 4;
+      ctx.save();
+      ctx.strokeStyle = C.green; ctx.lineWidth = 2; ctx.setLineDash([5, 3]);
+      ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bottom); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = C.green; ctx.font = "600 10px 'Inter', sans-serif"; ctx.textAlign = 'center';
+      ctx.fillText('Revenue $4.50', x, top - 4);
+      ctx.restore();
+    }
+  }],
+});
+
+// 1B: Cost savings
+const savingsData = [
+  { tech: 'VR Fertilizer',     save: 0.10 },
+  { tech: 'GPS Autosteer',     save: 0.07 },
+  { tech: 'Targeted Spraying', save: 0.07 },
+  { tech: 'Section Control',   save: 0.04 },
+  { tech: 'VR Seeding',        save: 0.02 },
+  { tech: 'Yield Analytics',   save: 0.02 },
+];
+const sCols = [C.navy, C.navyL, C.blue, C.blueM, C.teal, C.tealL];
+
+new Chart(document.getElementById('savingsChart'), {
+  type: 'bar',
+  data: {
+    labels: savingsData.map(d => d.tech),
+    datasets: [{ data: savingsData.map(d => d.save), backgroundColor: sCols, borderWidth: 0, borderRadius: 3, barPercentage: 0.6 }],
+  },
+  options: {
+    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+    scales: {
+      x: { grid: { color: '#EDF2F7', drawTicks: false }, border: { display: false }, ticks: { callback: v => '-$' + v.toFixed(2), font: { size: 10 } }, max: 0.13 },
+      y: { grid: { display: false }, border: { display: false }, ticks: { font: { size: 10, weight: '500' }, color: '#3A4F63' } },
+    },
+  },
+  plugins: [{
+    id: 'sValLabels',
+    afterDatasetsDraw(chart) {
+      const ctx = chart.ctx, meta = chart.getDatasetMeta(0);
+      ctx.save(); ctx.font = "600 10px 'Inter', sans-serif"; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      meta.data.forEach((bar, i) => { ctx.fillStyle = '#3A4F63'; ctx.fillText(`-$${savingsData[i].save.toFixed(2)}`, bar.x + 5, bar.y); });
+      ctx.restore();
+    },
+  }],
+});
+
+// 1C: ROI grouped bars
+const roiTechs = [
+  { tech: 'VR Fert.',    cost: 0.020, save: 0.10 },
+  { tech: 'Autosteer',   cost: 0.050, save: 0.07 },
+  { tech: 'Spraying',    cost: 0.025, save: 0.07 },
+  { tech: 'Sect. Ctrl',  cost: 0.015, save: 0.04 },
+  { tech: 'VR Seed',     cost: 0.010, save: 0.02 },
+  { tech: 'Analytics',   cost: 0.010, save: 0.02 },
+];
+
+new Chart(document.getElementById('roiChart'), {
+  type: 'bar',
+  data: {
+    labels: roiTechs.map(d => d.tech),
+    datasets: [
+      { label: 'Technology Cost', data: roiTechs.map(d => d.cost), backgroundColor: C.red + '55', borderColor: C.red, borderWidth: 1, borderRadius: 2, barPercentage: 0.55 },
+      { label: 'Cost Savings',    data: roiTechs.map(d => d.save), backgroundColor: C.green + '40', borderColor: C.green, borderWidth: 1, borderRadius: 2, barPercentage: 0.55 },
+    ],
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    scales: {
+      x: { grid: { display: false }, border: { display: false }, ticks: { font: { size: 9 } } },
+      y: { grid: { color: '#EDF2F7', drawTicks: false }, border: { display: false }, ticks: { callback: v => '$' + v.toFixed(2), font: { size: 9 } }, max: 0.12 },
+    },
+    plugins: {
+      legend: { display: true, position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, padding: 10, font: { size: 9, weight: '500' }, color: '#5A7084' } },
+    },
+  },
+});
+
+// 1D: Cost waterfall — $4.32 → -$0.32 savings → +$0.13 tech → $4.13
+// All visible values POSITIVE. Invisible base positions the bars.
+// Decrease bar: base at new level, bar rises to old level
+// Increase bar: base at current level, bar rises to new level
+new Chart(document.getElementById('costWaterfall'), {
+  type: 'bar',
+  data: {
+    labels: ['Baseline\nCost', 'Precision\nSavings', 'Tech\nCost', 'New\nCost'],
+    datasets: [
+      {
+        label: '_base',
+        data: [0, 4.00, 4.00, 0],
+        backgroundColor: 'transparent',
+        borderWidth: 0, barPercentage: 0.5, borderSkipped: false,
+      },
+      {
+        label: 'Value',
+        data: [4.32, 0.32, 0.13, 4.13],
+        backgroundColor: [C.navy, C.green, C.red, C.blueM],
+        borderWidth: 0, borderRadius: 3, barPercentage: 0.5,
+      },
+    ],
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    scales: {
+      x: { stacked: true, grid: { display: false }, border: { display: false }, ticks: { font: { size: 9, weight: '500' }, color: '#3A4F63', maxRotation: 0 } },
+      y: { stacked: true, grid: { color: '#EDF2F7', drawTicks: false }, border: { display: false }, ticks: { callback: v => '$' + v.toFixed(2), font: { size: 9 } }, max: 5.0, min: 0 },
+    },
+    plugins: {
+      tooltip: { filter: item => item.datasetIndex === 1 },
+      waterfallConnectors: { levels: [4.32, 4.00, 4.13] },
+    },
+  },
+  plugins: [
+    makeWaterfallLabels(['$4.32', '-$0.32', '+$0.13', '$4.13']),
+  ],
+});
+
+// ═════════════════════════════════════════════
+// SLIDE 2 CHARTS
+// ═════════════════════════════════════════════
+
+// 2A: Yield increase
+const yieldData = [
+  { tech: 'Planter Optimization', bu: 4, color: C.green },
+  { tech: 'VR Fertilizer',        bu: 2, color: C.greenL },
+  { tech: 'Targeted Spraying',    bu: 2, color: C.teal },
+  { tech: 'VR Seeding',           bu: 2, color: C.tealL },
+];
+
+new Chart(document.getElementById('yieldChart'), {
+  type: 'bar',
+  data: {
+    labels: yieldData.map(d => d.tech),
+    datasets: [{ data: yieldData.map(d => d.bu), backgroundColor: yieldData.map(d => d.color), borderWidth: 0, borderRadius: 3, barPercentage: 0.6 }],
+  },
+  options: {
+    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+    scales: {
+      x: { grid: { color: '#EDF2F7', drawTicks: false }, border: { display: false }, ticks: { callback: v => '+' + v + ' bu', font: { size: 10 } }, max: 6 },
+      y: { grid: { display: false }, border: { display: false }, ticks: { font: { size: 10, weight: '500' }, color: '#3A4F63' } },
+    },
+  },
+  plugins: [{
+    id: 'yLabels',
+    afterDatasetsDraw(chart) {
+      const ctx = chart.ctx, meta = chart.getDatasetMeta(0);
+      ctx.save(); ctx.font = "600 10px 'Inter', sans-serif"; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#3A4F63';
+      meta.data.forEach((bar, i) => ctx.fillText(`+${yieldData[i].bu} bu/ac`, bar.x + 5, bar.y));
+      ctx.restore();
+    },
+  }],
+});
+
+// 2B: Fixed cost dilution
+const fixedPerAc = 274 + 102; // land + equipment depreciation
+const buRange = [190, 200, 211, 215, 221, 230, 240];
+const fcPerBu = buRange.map(b => fixedPerAc / b);
+
+new Chart(document.getElementById('dilutionChart'), {
+  type: 'line',
+  data: {
+    labels: buRange.map(b => b + ' bu'),
+    datasets: [{
+      data: fcPerBu, borderColor: C.navy, backgroundColor: C.navy + '12', fill: true,
+      borderWidth: 2, tension: 0,
+      pointRadius: buRange.map(b => (b === 211 || b === 221) ? 7 : 3),
+      pointBackgroundColor: buRange.map(b => b === 211 ? C.gold : b === 221 ? C.green : C.navy),
+      pointBorderColor: buRange.map(b => b === 211 ? C.gold : b === 221 ? C.green : C.navy),
+      pointBorderWidth: 2,
+    }],
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    scales: {
+      x: { grid: { display: false }, border: { display: false }, ticks: { font: { size: 9 } } },
+      y: { grid: { color: '#EDF2F7', drawTicks: false }, border: { display: false },
+        ticks: { callback: v => '$' + v.toFixed(2), font: { size: 9 } },
+        title: { display: true, text: 'Fixed Cost per Bushel', font: { size: 9, weight: '500' }, color: '#5A7084' },
+      },
+    },
+  },
+  plugins: [{
+    id: 'dilAnnot',
+    afterDatasetsDraw(chart) {
+      const ctx = chart.ctx, meta = chart.getDatasetMeta(0);
+      ctx.save(); ctx.font = "600 9px 'Inter', sans-serif"; ctx.textAlign = 'center';
+      const bIdx = buRange.indexOf(211), pIdx = buRange.indexOf(221);
+      if (bIdx >= 0) {
+        const pt = meta.data[bIdx];
+        ctx.fillStyle = C.gold;
+        ctx.fillText('Baseline', pt.x, pt.y - 14);
+        ctx.fillText('$' + fcPerBu[bIdx].toFixed(2), pt.x, pt.y - 4);
+      }
+      if (pIdx >= 0) {
+        const pt = meta.data[pIdx];
+        ctx.fillStyle = C.green;
+        ctx.fillText('Precision Ag', pt.x, pt.y - 14);
+        ctx.fillText('$' + fcPerBu[pIdx].toFixed(2), pt.x, pt.y - 4);
+      }
+      ctx.restore();
+    },
+  }],
+});
+
+// 2C: Per-acre profit waterfall
+// $38 baseline → +$67 savings → +$45 yield → −$28 tech → $122 result
+// Decrease bar (tech cost): base at bottom (122), bar rises to 150
+new Chart(document.getElementById('profitWaterfall'), {
+  type: 'bar',
+  data: {
+    labels: ['Baseline\nProfit', 'Cost\nSavings', 'Yield\nRevenue', 'Technology\nCost', 'Precision\nProfit'],
+    datasets: [
+      {
+        label: '_base',
+        data: [0, 38, 105, 122, 0],
+        backgroundColor: 'transparent',
+        borderWidth: 0, barPercentage: 0.5, borderSkipped: false,
+      },
+      {
+        label: 'Value',
+        data: [38, 67, 45, 28, 122],
+        backgroundColor: [C.goldL, C.green, C.greenL, C.red, C.blueM],
+        borderWidth: 0, borderRadius: 3, barPercentage: 0.5,
+      },
+    ],
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    scales: {
+      x: { stacked: true, grid: { display: false }, border: { display: false }, ticks: { font: { size: 8.5, weight: '500' }, color: '#3A4F63', maxRotation: 0 } },
+      y: { stacked: true, grid: { color: '#EDF2F7', drawTicks: false }, border: { display: false },
+        ticks: { callback: v => '$' + v, font: { size: 9 } }, max: 170, min: 0,
+        title: { display: true, text: '$/acre', font: { size: 9, weight: '500' }, color: '#5A7084' },
+      },
+    },
+    plugins: {
+      tooltip: { filter: item => item.datasetIndex === 1 },
+      waterfallConnectors: { levels: [38, 105, 150, 122] },
+    },
+  },
+  plugins: [
+    makeWaterfallLabels(['$38', '+$67', '+$45', '-$28', '$122']),
+  ],
+});
+</script>
+
+</body>
+</html>
